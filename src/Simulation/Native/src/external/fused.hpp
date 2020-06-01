@@ -15,48 +15,25 @@
 #ifdef HAVE_FMA
 #include "external/avx2/kernels.hpp"
 #else
-#include "external/avx/kernels.hpp"
+#include "external/avx/kernels.hpp" //@@@DBW: This was mistakenly avx2
 #endif
 #endif
 #endif
 
-#include <chrono>
 namespace Microsoft
 {
 namespace Quantum
 {
-    extern int dbgFusedSpan;
-    extern int dbgFusedLimit;
-
 namespace SIMULATOR
 {
+
 class Fused
   {
-    //@@@DBG: Everything in here is added for debugging
-    mutable int dbgNfused;
-    mutable int dbgSize;
-    mutable int dbgNqs;
-    mutable int dbgNcs;
-    mutable int dbgNgates;
-    mutable double dbgElapsed;
-    mutable double dbgET1;
-    mutable double dbgET2;
-    mutable std::chrono::system_clock::time_point prev  = std::chrono::system_clock::now();
-
   public:
       Fused() {
-        dbgNfused   = 0;
-        dbgSize     = 0;
-        dbgNqs      = 0;
-        dbgNcs      = 0;
-        dbgNgates   = 0;
-        dbgElapsed  = 0.0;
-        dbgET1      = 0.0;
-        dbgET2      = 0.0;
-
-        wfnCapacity     = 0u; //@@@DBG used to optimize parameters
-        maxFusedSpan    =-1;
-        maxFusedDepth   = 99;
+        wfnCapacity     = 0u; //@@@DBW used to optimize runtime parameters
+        maxFusedSpan    =-1;  //@@@DBW determine span to use at runtime
+        maxFusedDepth   = 99; //@@@DBW determine max depth to use at runtime
     }
 
     inline void reset()
@@ -74,22 +51,12 @@ class Fused
       Fusion::Matrix m;
       Fusion::IndexVector qs, cs;
       
-      std::chrono::system_clock::time_point dbgT1 = std::chrono::system_clock::now();
       fusedgates.perform_fusion(m, qs, cs);
-      std::chrono::system_clock::time_point dbgT2 = std::chrono::system_clock::now();
-      std::chrono::duration<double> dbgE = dbgT2 - dbgT1;
-      dbgET1 += dbgE.count();
 
       std::size_t cmask = 0;
       for (auto c : cs)
         cmask |= (1ull << c);
       
-      dbgNfused++;
-      dbgSize += fusedgates.size();
-      dbgNqs += fusedgates.num_qubits();
-      dbgNcs += fusedgates.num_controls();
-
-      dbgT1 = std::chrono::system_clock::now();
       switch (qs.size())
       {
         case 1:
@@ -109,48 +76,7 @@ class Fused
           break;
       }
 
-      dbgT2 = std::chrono::system_clock::now();
-      dbgE = dbgT2 - dbgT1;
-      dbgET2 += dbgE.count();
-
       fusedgates = Fusion();
-
-      std::chrono::system_clock::time_point curr = std::chrono::system_clock::now();
-      std::chrono::duration<double> elapsed = curr - prev;
-      dbgElapsed = elapsed.count();
-      if (dbgElapsed >= 10.0) {
-          double nFused = (float)dbgNfused;
-          if (nFused < 1000.0 || dbgNgates < 1000.0) {
-              printf("@@@DBG sz=%.2f nQs=%.2f nCs=%.2f flushes=%4.0f  gates=%4.0f  elap=%5.1f  gps=%7.3f (fus=%5.1f%%, ker=%5.1f%%)\n",
-                  ((float)dbgSize / nFused),
-                  ((float)dbgNqs / nFused),
-                  ((float)dbgNcs / nFused),
-                  nFused,
-                  (float)dbgNgates,
-                  dbgElapsed,
-                  (float)dbgNgates / dbgElapsed,
-                  dbgET1 * 100.0 / dbgElapsed,
-                  dbgET2 * 100.0 / dbgElapsed);
-          }
-          else {
-              printf("@@@DBG sz=%.2f nQs=%.2f nCs=%.2f flushes=%4.0fK gates=%4.0fK elap=%5.1f kgps=%7.3f (fus=%5.1f%%, ker=%5.1f%%)\n",
-                  ((float)dbgSize / nFused),
-                  ((float)dbgNqs / nFused),
-                  ((float)dbgNcs / nFused),
-                  nFused / 1000.,
-                  (float)dbgNgates / 1000.,
-                  dbgElapsed,
-                  (float)dbgNgates / (1000. * dbgElapsed),
-                  dbgET1 * 100.0 / dbgElapsed,
-                  dbgET2 * 100.0 / dbgElapsed);
-          }
-          fflush(stdout);
-          dbgET1    = 0.0;
-          dbgET2    = 0.0;
-          prev      = curr;
-          dbgNgates = 0;
-      }
-
     }
     
     template <class T, class A1, class A2>
@@ -176,24 +102,9 @@ class Fused
     template <class T, class A, class M>
     void apply_controlled(std::vector<T, A>& wfn, M const& mat, std::vector<unsigned> const& cs, unsigned q)
     {
-        dbgNgates++;
+      //@@@DBW Major runtime logic change here
 
-#if 0 //@@@DBG: Original
-        if (fusedgates.num_qubits() + fusedgates.num_controls() + cs.size() > 8 || fusedgates.size() > 15)
-            flush(wfn);
-        Fusion newgates = fusedgates;
-
-        newgates.insert(convertMatrix(mat), std::vector<unsigned>(1, q), cs);
-      
-      if (newgates.num_qubits() > 4)
-      {
-          flush(wfn);
-          fusedgates.insert(convertMatrix(mat), std::vector<unsigned>(1, q), cs);
-      }
-      else
-          fusedgates = newgates;
-#else //@@@DBG: Re-write (newgates = fusedgates was the problem... constructor/destructor)
-
+        // Have to update capacity as the WFN grows
         if (wfnCapacity != wfn.capacity()) {
             wfnCapacity     = wfn.capacity();
             char* envNT = NULL;
@@ -219,16 +130,14 @@ class Fused
                 maxFusedSpan = 3;
                 if (wfnCapacity < 1ul << 20) maxFusedSpan = 2;
             }
-            printf("@@@DBG: OMP_NUM_THREADS=%d fusedSpan=%d fusedDepth=%d wfnCapacity=%u\n", omp_get_max_threads(), maxFusedSpan, maxFusedDepth, wfnCapacity);
         }
 
+        // New rules of when to stop fusing
         Fusion::IndexVector qs      = std::vector<unsigned>(1, q);
         if (fusedgates.predict(qs, cs) > maxFusedSpan || fusedgates.size() >= maxFusedDepth)  flush(wfn);
         fusedgates.insert(convertMatrix(mat), qs, cs);
-#endif
     }
 
-    
     template <class T, class A, class M>
     void apply(std::vector<T, A>& wfn, M const& mat, unsigned q)
     {
@@ -237,6 +146,8 @@ class Fused
     }
   private:
     mutable Fusion fusedgates;
+
+    //@@@DBW: New runtime optimizatin settings
     mutable size_t wfnCapacity;
     mutable int    maxFusedSpan;
     mutable int    maxFusedDepth;

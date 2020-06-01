@@ -1,4 +1,4 @@
-// (C) 2018 ETH Zurich, ITP, Thomas Häner and Damian Steiger
+// (C) 2018 ETH Zurich, ITP, Thomas HΣner and Damian Steiger
 
 template <class V, class M>
 inline void kernel_core(V& psi, std::size_t I, std::size_t d0, std::size_t d1, M const& m, M const& mt)
@@ -63,6 +63,7 @@ void kernel(V& psi, unsigned id1, unsigned id0, M const& matrix, std::size_t ctr
 
 #ifndef _MSC_VER
 	if (ctrlmask == 0){
+		//@@@DBW Was missing parallel directive
 		#pragma omp parallel for collapse(LOOP_COLLAPSE2) schedule(static)
 		for (std::size_t i0 = 0; i0 < n; i0 += 2 * dsorted[0]){
 			for (std::size_t i1 = 0; i1 < dsorted[0]; i1 += 2 * dsorted[1]){
@@ -73,6 +74,7 @@ void kernel(V& psi, unsigned id1, unsigned id0, M const& matrix, std::size_t ctr
 		}
 	}
 	else{
+		//@@@DBW Was missing parallel directive
 		#pragma omp parallel for collapse(LOOP_COLLAPSE2) schedule(static)
 		for (std::size_t i0 = 0; i0 < n; i0 += 2 * dsorted[0]){
 			for (std::size_t i1 = 0; i1 < dsorted[0]; i1 += 2 * dsorted[1]){
@@ -84,20 +86,20 @@ void kernel(V& psi, unsigned id1, unsigned id0, M const& matrix, std::size_t ctr
 		}
 	}
 #else
-	std::intptr_t zero = 0;
-	std::intptr_t dmask = dsorted[0] + dsorted[1];
+    std::intptr_t zero = 0;
+    std::intptr_t dmask = dsorted[0] + dsorted[1];
 
-	if (ctrlmask == 0){
-		#pragma omp parallel for schedule(static)
-		for (std::intptr_t i = 0; i < static_cast<std::intptr_t>(n); ++i)
-			if ((i & dmask) == zero)
-				kernel_core(psi, i, dsorted[1], dsorted[0], mm, mmt);
-	} else {
-		#pragma omp parallel for schedule(static)
-		for (std::intptr_t i = 0; i < static_cast<std::intptr_t>(n); ++i)
-			if ((i & ctrlmask) == ctrlmask && (i & dmask) == zero)
-				kernel_core(psi, i, dsorted[1], dsorted[0], mm, mmt);
-	}
+    if (ctrlmask == 0){
+        #pragma omp parallel for schedule(static)
+        for (std::intptr_t i = 0; i < static_cast<std::intptr_t>(n); ++i)
+            if ((i & dmask) == zero)
+                kernel_core(psi, i, dsorted[1], dsorted[0], mm, mmt);
+     } else {
+        #pragma omp parallel for schedule(static)
+        for (std::intptr_t i = 0; i < static_cast<std::intptr_t>(n); ++i)
+            if ((i & ctrlmask) == ctrlmask && (i & dmask) == zero)
+                kernel_core(psi, i, dsorted[1], dsorted[0], mm, mmt);
+     }
 #endif
 }
 

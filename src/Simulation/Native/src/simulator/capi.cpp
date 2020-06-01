@@ -14,12 +14,6 @@ MICROSOFT_QUANTUM_DECL unsigned init()
   return Microsoft::Quantum::Simulator::create();
 }
 
-//@@@DBG: Debugging version with force
-MICROSOFT_QUANTUM_DECL unsigned initDBG(int force,int fusedSpan,int fusedLimit)
-{
-    return Microsoft::Quantum::Simulator::createDBG(0ul,force,fusedSpan,fusedLimit);
-}
-
 MICROSOFT_QUANTUM_DECL void destroy(_In_ unsigned id)
   {
     Microsoft::Quantum::Simulator::destroy(id);

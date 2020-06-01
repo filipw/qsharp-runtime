@@ -29,33 +29,12 @@ namespace Microsoft
 {
   namespace Quantum
   {
-      int dbgFusedSpan  = -1;
-      int dbgFusedLimit = 99;
     namespace Simulator
     {
       mutex_type _mutex;
 
-      //@@@DBG: added force and fusedSpan
-      SimulatorInterface* createSimulator(unsigned maxlocal,int force=0,int fusedSpan=-1, int fusedLimit=99)
+      SimulatorInterface* createSimulator(unsigned maxlocal)
       {
-          dbgFusedSpan = fusedSpan;
-          dbgFusedLimit = fusedLimit;
-
-        if (force > 0) {
-            switch (force) {
-            case 1:
-                printf("@@@DBG: Generic\n");
-                return SimulatorGeneric::createSimulator(maxlocal);
-            case 2: 
-                printf("@@@DBG: AVX\n");
-                return SimulatorAVX::createSimulator(maxlocal);
-            case 3: 
-                printf("@@@DBG: AVX2\n");
-                return SimulatorAVX2::createSimulator(maxlocal);
-
-            }
-        }
-
         if (haveFMA() && haveAVX2())
         {
             return SimulatorAVX2::createSimulator(maxlocal);
@@ -68,6 +47,7 @@ namespace Microsoft
         {
             return SimulatorGeneric::createSimulator(maxlocal);
         }
+
       }
 
       MICROSOFT_QUANTUM_DECL unsigned create(unsigned maxlocal)
@@ -95,34 +75,6 @@ namespace Microsoft
         }
 
         return static_cast<unsigned>(emptySlot);
-      }
-
-      //@@@DBG: for benchmarks
-      MICROSOFT_QUANTUM_DECL unsigned createDBG(unsigned maxlocal,int force,int fusedSpan,int fusedLimit)
-      {
-          std::lock_guard<mutex_type> lock(_mutex);
-
-          size_t emptySlot = -1;
-          for (auto const& s : psis)
-          {
-              if (s == NULL)
-              {
-                  emptySlot = &s - &psis[0];
-                  break;
-              }
-          }
-
-          if (emptySlot == -1)
-          {
-              psis.push_back(std::shared_ptr<SimulatorInterface>(createSimulator(maxlocal,force,fusedSpan,fusedLimit)));
-              emptySlot = psis.size() - 1;
-          }
-          else
-          {
-              psis[emptySlot] = std::shared_ptr<SimulatorInterface>(createSimulator(maxlocal,force,fusedSpan,fusedLimit));
-          }
-
-          return static_cast<unsigned>(emptySlot);
       }
 
       MICROSOFT_QUANTUM_DECL void destroy(unsigned id)

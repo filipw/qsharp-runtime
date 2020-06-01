@@ -8,14 +8,9 @@
 #include <vector>
 #include <complex>
 #include <array>
-#include <omp.h>
-#include <chrono>
-
-#include "util/cpuid.hpp" //@@@DBG
-
-#include "capi.hpp"
 
 // some convenience functions
+
 void CX(unsigned sim_id, unsigned c, unsigned q)
 {
     MCX(sim_id,1,&c,q);
@@ -419,7 +414,6 @@ void test_permute_basis_adjoint()
 
 int main()
 {
-#if 0 // Original tests
     std::cerr << "Testing allocate\n";
     test_allocate();
     std::cerr << "Testing gates\n";
@@ -433,76 +427,4 @@ int main()
     // test_dump();
     // test_dump_qubits();
     return 0;
-#endif
-
-#if 1 // Simulator timing tests
-    printf("@@@DBG max=%d procs=%d thrds=%d\n", omp_get_max_threads(), omp_get_num_procs(), omp_get_num_threads());
-    char* envNT = NULL;
-    size_t len;
-#ifdef _MSC_VER
-    errno_t err = _dupenv_s(&envNT, &len, "OMP_NUM_THREADS");
-#else
-    envNT = getenv("OMP_NUM_THREADS");
-#endif
-    int fuseLimits[] = {0,1,2,5,10,50,100};
-    for (int fuseSpan = 4; fuseSpan < 5; fuseSpan++) { // 1,5
-        for (int flIdx = 6; flIdx < 7; flIdx++) { // 0,7
-            for (int numThreads = 1; numThreads < 2; numThreads++) { // 1,5
-                for (int simTyp = 1; simTyp < 2; simTyp++) { // 1,4
-                    if (simTyp == 3 && (!Microsoft::Quantum::haveFMA() || !Microsoft::Quantum::haveAVX2())) continue;
-                    if (simTyp == 2 && !Microsoft::Quantum::haveAVX()) continue;
-
-                    if (envNT == NULL) omp_set_num_threads(numThreads);
-                    auto sim_id = initDBG(simTyp, fuseSpan, fuseLimits[flIdx]);
-
-                    const int nQs = 15;
-                    for (int q = 0; q < nQs; q++) allocateQubit(sim_id, q);
-
-                    std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
-                    for (int i = 0; i < 1000000; i++) {
-                        for (int dir = 0; dir < 2; dir++) {
-                            for (int k = 0; k < 5; k++) {
-                                unsigned c = k;
-                                if (dir == 1) c = (nQs - 1) - k;
-                                for (int j = 0; j < 5; j++) {
-                                    if (k == 0) H(sim_id, c);
-                                    else        MCX(sim_id, 1, &c, c - 1);
-                                }
-                            }
-                        }
-
-                        std::chrono::system_clock::time_point curr = std::chrono::system_clock::now();
-                        std::chrono::duration<double> elapsed = curr - start;
-                        if (elapsed.count() >= 40.0) break;
-                    }
-
-                    destroy(sim_id);
-                }
-                if (envNT != NULL) break;
-            }
-        }
-    }
-#endif
-
-#if 0 // OpenMP test
-    double thrd1elapsed = 1.0;
-    for (int thrds = 1; thrds < 9; thrds++) {
-        std::chrono::system_clock::time_point start = std::chrono::system_clock::now();
-        omp_set_num_threads(thrds);
-        double rslts[8] = { 0,0,0,0,0,0,0,0 };
-        int outer = 800000;
-        int inner = 2000;
-        #pragma omp parallel for schedule(static,outer/100)
-        for (int i = 0; i < outer; i++) {
-            double x = 1.0;
-            for (int j = 0; j < inner; j++) x += sqrt((double)j);
-            rslts[omp_get_thread_num()] += x;
-        }
-        std::chrono::system_clock::time_point curr = std::chrono::system_clock::now();
-        std::chrono::duration<double> elapsed = curr - start;
-        double elap = elapsed.count();
-        if (thrds == 1) thrd1elapsed = elap;
-        printf("@@@DBG threads: %d Elapsed: %.2f Factor: %.2f\n", thrds, elap, thrd1elapsed/elap);
-    }
-#endif
 }

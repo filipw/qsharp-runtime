@@ -12,6 +12,7 @@ namespace Microsoft
 {
   namespace Quantum
   {
+
     inline bool haveAVX()
     {
       try

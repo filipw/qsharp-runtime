@@ -7,6 +7,7 @@
 
 int main()
 {
+
     using namespace Microsoft::Quantum::openmp;
 
     init();
