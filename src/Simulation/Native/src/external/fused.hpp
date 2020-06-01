@@ -122,14 +122,14 @@ class Fused
                 omp_set_num_threads(nMaxThrds);
             }
 
-            maxFusedDepth = dbgFusedLimit;
-            if (maxFusedDepth < 0) maxFusedDepth = 99;
+            // This is now pretty much unlimited, could be set in the future
+            maxFusedDepth = 99;
 
-            maxFusedSpan = dbgFusedSpan;
-            if (maxFusedSpan < 0) {
-                maxFusedSpan = 3;
-                if (wfnCapacity < 1ul << 20) maxFusedSpan = 2;
-            }
+            // Default for large problems (optimized with benchmarks)
+            maxFusedSpan = 3;
+
+            // Reduce size for small problems (optimized with benchmarks)
+            if (wfnCapacity < 1ul << 20) maxFusedSpan = 2;
         }
 
         // New rules of when to stop fusing
